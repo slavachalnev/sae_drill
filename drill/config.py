@@ -9,19 +9,19 @@ class SAEConfig:
     model_name: str = "gelu-2l"
     hook_point: str = "blocks.{layer}.hook_resid_pre"
     hook_point_layer: int = 1
-    dataset_path = "NeelNanda/c4-code-tokenized-2b",
+    dataset_path = "NeelNanda/c4-code-tokenized-2b"
     is_dataset_tokenized=True,
     context_size: int = 1024
 
     # SAE Parameters
-    d_in: int = 512,
+    d_in: int = 512
     expansion_factor: int = 4
     from_pretrained_path: Optional[str] = None
     d_sae: Optional[int] = None
 
     # Activation Store Parameters
     n_batches_in_buffer: int = 20
-    store_batch_size: int = 32
+    store_batch_size: int = 4 #32
 
     # Training Parameters
     l1_coefficient: float = 1e-3
