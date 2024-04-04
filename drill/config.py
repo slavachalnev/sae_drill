@@ -21,7 +21,7 @@ class SAEConfig:
 
     # Activation Store Parameters
     n_batches_in_buffer: int = 20
-    store_batch_size: int = 4 #32
+    store_batch_size: int = 32
 
     # Training Parameters
     l1_coefficient: float = 1e-3
@@ -32,12 +32,14 @@ class SAEConfig:
     )
     lr_warm_up_steps: int = 500
     train_batch_size: int = 4096
+    n_training_tokens: int = int(1e9)
 
     dead_feature_threshold: float = 1e-8
+    checkpoint_frequency: int = 10000
 
     # WANDB
-    log_to_wandb: bool = False
-    wandb_project: Optional[str] = None
+    log_to_wandb: bool = True
+    wandb_project: Optional[str] = "drill_pre"
     run_name: Optional[str] = None
     wandb_log_frequency: int = 100
 
