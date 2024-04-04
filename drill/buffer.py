@@ -21,16 +21,11 @@ class ActivationBuffer:
     def fill_buffer(self):
         buffer_index = self.batch_idx * self.cfg.store_batch_size
         while buffer_index < self.buffer_size:
-            print(f"Filling buffer: {buffer_index}/{self.buffer_size}")
             tokens = self.get_token_batch()
-            print('tokens shape', tokens.shape)
             activations = self.model.run_with_cache(tokens, stop_at_layer=self.cfg.hook_point_layer + 1)[1][self.hook_point]
             activations = activations.view(-1, self.cfg.d_in)
-            print('activations shape', activations.shape)
-            print('buffer_index', buffer_index)
-            print('buffer shape', self.buffer.shape)
-            self.buffer[buffer_index : buffer_index + self.cfg.store_batch_size] = activations
-            buffer_index += self.cfg.store_batch_size
+            self.buffer[buffer_index : buffer_index + self.cfg.store_batch_size * self.cfg.context_size] = activations
+            buffer_index += self.cfg.store_batch_size * self.cfg.context_size
         self.buffer = self.buffer[torch.randperm(self.buffer_size)]
         self.batch_idx = 0
 
