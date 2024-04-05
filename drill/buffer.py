@@ -14,7 +14,7 @@ class ActivationBuffer:
         self.token_loader = iter(DataLoader(self.dataset, batch_size=cfg.store_batch_size))
         self.hook_point = self.cfg.hook_point.format(layer=self.cfg.hook_point_layer)
         self.buffer_size = cfg.n_batches_in_buffer * cfg.store_batch_size * cfg.context_size
-        self.buffer = torch.zeros((self.buffer_size, self.cfg.d_in), dtype=torch.float32)
+        self.buffer = torch.zeros((self.buffer_size, self.cfg.d_in), dtype=torch.float32, device=cfg.device)
         self.batch_idx = 0
         self.fill_buffer()
 

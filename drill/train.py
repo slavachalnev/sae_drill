@@ -7,7 +7,8 @@ from buffer import ActivationBuffer
 from transformer_lens import HookedTransformer
 
 def main():
-    cfg = SAEConfig()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    cfg = SAEConfig(device=device)
     
     # Initialize wandb
     if cfg.log_to_wandb:
@@ -15,6 +16,7 @@ def main():
 
     model = HookedTransformer.from_pretrained(cfg.model_name)
     sae = SparseAutoencoder(cfg)
+    sae.to(cfg.device)
     buffer = ActivationBuffer(cfg, model)
 
     optimizer = torch.optim.Adam(sae.parameters(), lr=cfg.lr)
