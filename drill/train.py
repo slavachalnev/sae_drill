@@ -44,12 +44,15 @@ def main():
         if cfg.log_to_wandb and (step + 1) % cfg.wandb_log_frequency == 0:
             dead_features_prop = (steps_since_last_activation >= cfg.dead_feature_threshold).float().mean()
 
+            l_0 = (feature_acts > 0).float().sum(dim=-1).mean()
+
             wandb.log({
                 "step": step,
                 "loss": loss.item(),
                 "mse_loss": mse_loss.item(),
                 "l1_loss": l1_loss.item(),
                 "dead_features_prop": dead_features_prop.item(),
+                "l_0": l_0.item(),
             })
 
         print(f"Step: {step}, Loss: {loss.item()}")
