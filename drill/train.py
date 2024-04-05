@@ -24,19 +24,30 @@ def main():
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     num_steps = cfg.n_training_tokens // cfg.train_batch_size
+    steps_since_last_activation = torch.zeros(cfg.d_sae, dtype=torch.int64)
+
     for step in range(num_steps):
         optimizer.zero_grad()
         acts = buffer.get_activations()
         sae_out, feature_acts, loss, mse_loss, l1_loss = sae(acts)
         loss.backward()
         optimizer.step()
+        # print('feature acts shape', feature_acts.shape) # [batch_size, d_sae]
+
+        # Update dead feature tracker
+        activated_features = (feature_acts > 0).any(dim=0)
+        steps_since_last_activation[activated_features] = 0
+        steps_since_last_activation[~activated_features] += cfg.train_batch_size
 
         if cfg.log_to_wandb and (step + 1) % cfg.wandb_log_frequency == 0:
+            dead_features_prop = (steps_since_last_activation >= cfg.dead_feature_threshold).mean()
+
             wandb.log({
                 "step": step,
                 "loss": loss.item(),
                 "mse_loss": mse_loss.item(),
                 "l1_loss": l1_loss.item(),
+                "dead_features_prop": dead_features_prop.item(),
             })
 
         print(f"Step: {step}, Loss: {loss.item()}")
