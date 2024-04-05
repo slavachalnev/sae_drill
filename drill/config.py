@@ -20,7 +20,7 @@ class SAEConfig:
     d_sae: Optional[int] = None
 
     # Activation Store Parameters
-    n_batches_in_buffer: int = 20
+    n_batches_in_buffer: int = 100
     store_batch_size: int = 32
 
     # Training Parameters

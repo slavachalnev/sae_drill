@@ -37,12 +37,12 @@ def main():
         # print('feature acts shape', feature_acts.shape) # [batch_size, d_sae]
 
         # Update dead feature tracker
-        activated_features = (feature_acts > 0).any(dim=0)
+        activated_features = (feature_acts > 0).any(dim=0).cpu()
         steps_since_last_activation[activated_features] = 0
         steps_since_last_activation[~activated_features] += cfg.train_batch_size
 
         if cfg.log_to_wandb and (step + 1) % cfg.wandb_log_frequency == 0:
-            dead_features_prop = (steps_since_last_activation >= cfg.dead_feature_threshold).mean()
+            dead_features_prop = (steps_since_last_activation >= cfg.dead_feature_threshold).float().mean()
 
             wandb.log({
                 "step": step,
