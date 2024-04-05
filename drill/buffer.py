@@ -19,7 +19,7 @@ class ActivationBuffer:
         self.fill_buffer()
 
     def fill_buffer(self):
-        buffer_index = self.batch_idx * self.cfg.store_batch_size
+        buffer_index = self.batch_idx * self.cfg.store_batch_size * self.cfg.context_size
         while buffer_index < self.buffer_size:
             tokens = self.get_token_batch()
             activations = self.model.run_with_cache(tokens, stop_at_layer=self.cfg.hook_point_layer + 1)[1][self.hook_point]
@@ -31,9 +31,11 @@ class ActivationBuffer:
 
     def get_activations(self):
         if self.batch_idx > self.cfg.n_batches_in_buffer // 2:
-            self.buffer = self.buffer[self.batch_idx * self.cfg.store_batch_size :]
+            # self.buffer = self.buffer[self.batch_idx * self.cfg.store_batch_size :]
             self.fill_buffer()
-        activations = self.buffer[self.batch_idx * self.cfg.store_batch_size : (self.batch_idx + 1) * self.cfg.store_batch_size]
+        from_idx = self.batch_idx * self.cfg.store_batch_size * self.cfg.context_size
+        to_idx = (self.batch_idx + 1) * self.cfg.store_batch_size * self.cfg.context_size
+        activations = self.buffer[from_idx : to_idx]
         self.batch_idx += 1
         return activations
 
