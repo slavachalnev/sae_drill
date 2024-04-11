@@ -46,6 +46,7 @@ def main():
         sae_out, feature_acts, loss, mse_loss, l1_loss = sae(acts)
         loss.backward()
         optimizer.step()
+        lr_scheduler.step()
         # print('feature acts shape', feature_acts.shape) # [batch_size, d_sae]
 
         # Update dead feature tracker
