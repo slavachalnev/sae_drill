@@ -20,11 +20,11 @@ class SAEConfig:
     d_sae: Optional[int] = None
 
     # Activation Store Parameters
-    n_batches_in_buffer: int = 100
-    store_batch_size: int = 32
+    n_batches_in_buffer: int = 50
+    store_batch_size: int = 16
 
     # Training Parameters
-    l1_coefficient: float = 1e-3
+    l1_coefficient: float = 5e-4
     lp_norm: float = 1
     lr: float = 3e-4
     lr_scheduler_name: str = (
@@ -32,13 +32,12 @@ class SAEConfig:
     )
     lr_warm_up_steps: int = 500
     train_batch_size: int = 4096
-    n_training_tokens: int = int(1e9)
+    n_training_tokens: int = int(2e9)
 
     dead_feature_threshold: float = 1e-8
     checkpoint_frequency: int = 10000
 
-
-    steps_between_resample: int = 25000
+    steps_between_resample: int =  3000 # Anthropic does every 25000
 
     # WANDB
     log_to_wandb: bool = True

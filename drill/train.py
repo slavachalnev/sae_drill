@@ -60,7 +60,8 @@ def main():
                 "l_0": l_0.item(),
             })
 
-        print(f"Step: {step}, Loss: {loss.item()}")
+        if step % 10 == 0:
+            print(f"Step: {step}, Loss: {loss.item()}")
 
         # Save checkpoint every cfg.checkpoint_frequency steps
         if step % cfg.checkpoint_frequency == 0:
@@ -72,6 +73,7 @@ def main():
             dead_idxs = steps_since_last_activation >= cfg.dead_feature_threshold
             resample(sae=sae, buffer=buffer, dead_idxs=dead_idxs)
             reset_optimizer(sae, optimizer, dead_idxs)
+            steps_since_last_activation[dead_idxs] = 0
 
     # Save final model
     final_model_path = os.path.join(checkpoint_dir, "final_model.pt")
@@ -84,7 +86,7 @@ def main():
 
 def resample(sae: SparseAutoencoder, buffer: ActivationBuffer, dead_idxs):
     # find the inputs where loss is high
-    n_resample_steps = 10  # should be like 200
+    n_resample_steps = 200
     all_acts = []
     all_outs = []
     all_loss = []
@@ -95,9 +97,9 @@ def resample(sae: SparseAutoencoder, buffer: ActivationBuffer, dead_idxs):
             sae_out = sae(acts)[0]
         
         mse_losses = ((sae_out - acts) ** 2).mean(dim=-1)
-        all_acts.append(acts)
-        all_outs.append(sae_out)
-        all_loss.append(mse_losses)
+        all_acts.append(acts.to('cpu'))
+        all_outs.append(sae_out.to('cpu'))
+        all_loss.append(mse_losses.to('cpu'))
     
     all_acts = torch.cat(all_acts, dim=0)
     all_outs = torch.cat(all_outs, dim=0)
@@ -109,6 +111,7 @@ def resample(sae: SparseAutoencoder, buffer: ActivationBuffer, dead_idxs):
     n_dead = dead_idxs.sum().item()
     resample_idxs = torch.multinomial(probs, n_dead, replacement=True)
     resample_acts = all_acts[resample_idxs]
+    resample_acts = resample_acts.to(sae.W_enc.device)
     resample_acts = resample_acts / torch.norm(resample_acts, dim=-1, keepdim=True)
 
     sae.W_enc.data[:, dead_idxs] = resample_acts.T
@@ -127,12 +130,12 @@ def reset_optimizer(sae: SparseAutoencoder, optimizer, dead_idxs):
                 state = optimizer.state[p]
                 state['exp_avg'][:, dead_idxs] = 0.0
                 state['exp_avg_sq'][:, dead_idxs] = 0.0
-                state['step'] = torch.tensor(0, dtype=torch.int64, device=p.device)
+                state['step'] = torch.tensor(0, dtype=torch.float32)
             elif p is sae.W_dec or p is sae.b_enc:
                 state = optimizer.state[p]
                 state['exp_avg'][dead_idxs] = 0.0
                 state['exp_avg_sq'][dead_idxs] = 0.0
-                state['step'] = torch.tensor(0, dtype=torch.int64, device=p.device)
+                state['step'] = torch.tensor(0, dtype=torch.float32)
 
 
 if __name__ == "__main__":
