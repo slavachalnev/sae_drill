@@ -2,7 +2,6 @@ import os
 import time
 import wandb
 import torch
-from torch.cuda.amp import GradScaler
 from config import SAEConfig
 from model import SparseAutoencoder
 from buffer import ActivationBuffer
@@ -16,7 +15,6 @@ def main():
                     # log_to_wandb=False,  ## for testing
                     # n_batches_in_buffer=10,  ## for testing
                     )
-    scaler = GradScaler()
     
     # Initialize wandb
     if cfg.log_to_wandb:
@@ -49,14 +47,10 @@ def main():
         optimizer.zero_grad()
         acts = buffer.get_activations()
 
-        with torch.cuda.amp.autocast():
-            sae_out, feature_acts, loss, mse_loss, l1_loss = sae(acts)
+        sae_out, feature_acts, loss, mse_loss, l1_loss = sae(acts)
 
-        # loss.backward()
-        # optimizer.step()
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
+        loss.backward()
+        optimizer.step()
         lr_scheduler.step()
 
         # Update dead feature tracker
@@ -113,7 +107,7 @@ def resample(sae: SparseAutoencoder, buffer: ActivationBuffer, dead_idxs):
     for _ in range(n_resample_steps):
         acts = buffer.get_activations()  # [4096, 512]
 
-        with torch.no_grad(), torch.cuda.amp.autocast():
+        with torch.no_grad():
             sae_out = sae(acts)[0]
         
         mse_losses = ((sae_out - acts) ** 2).mean(dim=-1)
