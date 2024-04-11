@@ -37,6 +37,9 @@ class SAEConfig:
     dead_feature_threshold: float = 1e-8
     checkpoint_frequency: int = 10000
 
+
+    steps_between_resample: int = 25000
+
     # WANDB
     log_to_wandb: bool = True
     wandb_project: Optional[str] = "drill_pre"

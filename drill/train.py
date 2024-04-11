@@ -6,9 +6,14 @@ from model import SparseAutoencoder
 from buffer import ActivationBuffer
 from transformer_lens import HookedTransformer
 
+
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    cfg = SAEConfig(device=device)
+    cfg = SAEConfig(device=device,
+                    # steps_between_resample=10, ## for testing
+                    # log_to_wandb=False,  ## for testing
+                    # n_batches_in_buffer=10,  ## for testing
+                    )
     
     # Initialize wandb
     if cfg.log_to_wandb:
@@ -62,6 +67,11 @@ def main():
             checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_step_{step}.pt")
             torch.save(sae.state_dict(), checkpoint_path)
             print(f"Checkpoint saved at step {step}")
+        
+        if (step + 1) % cfg.steps_between_resample == 0:
+            dead_idxs = steps_since_last_activation >= cfg.dead_feature_threshold
+            resample(sae=sae, buffer=buffer, dead_idxs=dead_idxs)
+            reset_optimizer(sae, optimizer, dead_idxs)
 
     # Save final model
     final_model_path = os.path.join(checkpoint_dir, "final_model.pt")
@@ -70,6 +80,60 @@ def main():
 
     if cfg.log_to_wandb:
         wandb.finish()
+
+
+def resample(sae: SparseAutoencoder, buffer: ActivationBuffer, dead_idxs):
+    # find the inputs where loss is high
+    n_resample_steps = 10  # should be like 200
+    all_acts = []
+    all_outs = []
+    all_loss = []
+    for _ in range(n_resample_steps):
+        acts = buffer.get_activations()  # [4096, 512]
+
+        with torch.no_grad():
+            sae_out = sae(acts)[0]
+        
+        mse_losses = ((sae_out - acts) ** 2).mean(dim=-1)
+        all_acts.append(acts)
+        all_outs.append(sae_out)
+        all_loss.append(mse_losses)
+    
+    all_acts = torch.cat(all_acts, dim=0)
+    all_outs = torch.cat(all_outs, dim=0)
+    all_loss = torch.cat(all_loss, dim=0)
+
+    probs = all_loss ** 2
+    probs = probs / probs.sum()
+
+    n_dead = dead_idxs.sum().item()
+    resample_idxs = torch.multinomial(probs, n_dead, replacement=True)
+    resample_acts = all_acts[resample_idxs]
+    resample_acts = resample_acts / torch.norm(resample_acts, dim=-1, keepdim=True)
+
+    sae.W_enc.data[:, dead_idxs] = resample_acts.T
+    sae.W_dec.data[dead_idxs] = resample_acts
+    sae.b_enc.data[dead_idxs] = 0.0
+
+    # set norm of encoder to avg norm of non-dead features * 0.2
+    avg_encoder_norm = torch.norm(sae.W_enc.data[:, ~dead_idxs], dim=0).mean()
+    sae.W_enc.data[:, dead_idxs] *= avg_encoder_norm * 0.2
+
+
+def reset_optimizer(sae: SparseAutoencoder, optimizer, dead_idxs):
+    for group in optimizer.param_groups:
+        for p in group['params']:
+            if p is sae.W_enc:
+                state = optimizer.state[p]
+                state['exp_avg'][:, dead_idxs] = 0.0
+                state['exp_avg_sq'][:, dead_idxs] = 0.0
+                state['step'] = torch.tensor(0, dtype=torch.int64, device=p.device)
+            elif p is sae.W_dec or p is sae.b_enc:
+                state = optimizer.state[p]
+                state['exp_avg'][dead_idxs] = 0.0
+                state['exp_avg_sq'][dead_idxs] = 0.0
+                state['step'] = torch.tensor(0, dtype=torch.int64, device=p.device)
+
 
 if __name__ == "__main__":
     main()
