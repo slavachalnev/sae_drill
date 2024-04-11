@@ -49,6 +49,7 @@ class SAEConfig:
     # Misc
     device: str = "cpu"
     # dtype: torch.dtype = torch.float32
+    amp: bool = True
 
     def __post_init__(self):
 

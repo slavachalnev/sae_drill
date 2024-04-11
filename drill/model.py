@@ -34,7 +34,7 @@ class SparseAutoencoder(HookedRootModule):
         self.d_sae = cfg.d_sae
         self.l1_coefficient = cfg.l1_coefficient
         self.lp_norm = cfg.lp_norm
-        self.dtype = torch.float32 # for now.
+        self.dtype = torch.float16 if cfg.amp else torch.float32
         self.device = cfg.device
 
         self.W_enc = nn.Parameter(

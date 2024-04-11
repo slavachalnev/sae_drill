@@ -1,6 +1,8 @@
 import os
-import torch
+import time
 import wandb
+import torch
+from torch.cuda.amp import GradScaler
 from config import SAEConfig
 from model import SparseAutoencoder
 from buffer import ActivationBuffer
@@ -14,6 +16,7 @@ def main():
                     # log_to_wandb=False,  ## for testing
                     # n_batches_in_buffer=10,  ## for testing
                     )
+    scaler = GradScaler()
     
     # Initialize wandb
     if cfg.log_to_wandb:
@@ -40,14 +43,21 @@ def main():
     num_steps = cfg.n_training_tokens // cfg.train_batch_size
     steps_since_last_activation = torch.zeros(cfg.d_sae, dtype=torch.int64)
 
+    t = time.time()
+
     for step in range(num_steps):
         optimizer.zero_grad()
         acts = buffer.get_activations()
-        sae_out, feature_acts, loss, mse_loss, l1_loss = sae(acts)
-        loss.backward()
-        optimizer.step()
+
+        with torch.cuda.amp.autocast():
+            sae_out, feature_acts, loss, mse_loss, l1_loss = sae(acts)
+
+        # loss.backward()
+        # optimizer.step()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
         lr_scheduler.step()
-        # print('feature acts shape', feature_acts.shape) # [batch_size, d_sae]
 
         # Update dead feature tracker
         activated_features = (feature_acts > 0).any(dim=0).cpu()
@@ -69,7 +79,8 @@ def main():
             })
 
         if step % 10 == 0:
-            print(f"Step: {step}, Loss: {loss.item()}")
+            print(f"Step: {step}, Loss: {loss.item()}, Time: {time.time() - t}")
+            t = time.time()
 
         # Save checkpoint every cfg.checkpoint_frequency steps
         if step % cfg.checkpoint_frequency == 0:
@@ -102,7 +113,7 @@ def resample(sae: SparseAutoencoder, buffer: ActivationBuffer, dead_idxs):
     for _ in range(n_resample_steps):
         acts = buffer.get_activations()  # [4096, 512]
 
-        with torch.no_grad():
+        with torch.no_grad(), torch.cuda.amp.autocast():
             sae_out = sae(acts)[0]
         
         mse_losses = ((sae_out - acts) ** 2).mean(dim=-1)
