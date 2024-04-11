@@ -26,6 +26,13 @@ def main():
 
     optimizer = torch.optim.Adam(sae.parameters(), lr=cfg.lr)
 
+    if cfg.lr_scheduler_name == "constant":
+        lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda _: 1.0)
+    elif cfg.lr_scheduler_name == "constantwithwarmup":
+        lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lambda step: min(1.0, step / cfg.lr_warm_up_steps))
+    else:
+        raise ValueError(f"Unknown lr_scheduler_name: {cfg.lr_scheduler_name}")
+
     # Create checkpoint directory
     checkpoint_dir = "checkpoints"
     os.makedirs(checkpoint_dir, exist_ok=True)
