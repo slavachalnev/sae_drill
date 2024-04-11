@@ -101,8 +101,14 @@ class SparseAutoencoder(HookedRootModule):
         )
 
         mse_loss = mse_loss.mean()
+
         sparsity = feature_acts.norm(p=self.lp_norm, dim=1).mean(dim=(0,))
-        l1_loss = self.l1_coefficient * sparsity
+
+        if self.cfg.use_sqrt_l1_penalty:
+            l1_loss = self.l1_coefficient * torch.sqrt(sparsity)
+        else:
+            l1_loss = self.l1_coefficient * sparsity
+
         loss = mse_loss + l1_loss
 
         return sae_out, feature_acts, loss, mse_loss, l1_loss
