@@ -34,7 +34,7 @@ class SAEConfig:
     train_batch_size: int = 4096
     n_training_tokens: int = int(2e9)
 
-    dead_feature_threshold: float = 1e-8
+    dead_feature_threshold: float = 1e7
     checkpoint_frequency: int = 10000
 
     steps_between_resample: int =  3000 # Anthropic does every 25000

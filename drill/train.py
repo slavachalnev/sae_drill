@@ -71,9 +71,10 @@ def main():
         
         if (step + 1) % cfg.steps_between_resample == 0:
             dead_idxs = steps_since_last_activation >= cfg.dead_feature_threshold
-            resample(sae=sae, buffer=buffer, dead_idxs=dead_idxs)
-            reset_optimizer(sae, optimizer, dead_idxs)
-            steps_since_last_activation[dead_idxs] = 0
+            if dead_idxs.sum() != 0:
+                resample(sae=sae, buffer=buffer, dead_idxs=dead_idxs)
+                reset_optimizer(sae, optimizer, dead_idxs)
+                steps_since_last_activation[dead_idxs] = 0
 
     # Save final model
     final_model_path = os.path.join(checkpoint_dir, "final_model.pt")
