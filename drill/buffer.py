@@ -2,7 +2,7 @@ import time
 import torch
 import numpy as np
 from datasets import load_dataset
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from transformer_lens import HookedTransformer
 from config import SAEConfig
 
@@ -53,3 +53,42 @@ class ActivationBuffer:
         except StopIteration:
             self.token_loader = iter(DataLoader(self.dataset, batch_size=self.cfg.store_batch_size))
             return next(self.token_loader)['tokens']
+
+
+class ActivationDataset(Dataset):
+    """Returns batches from a memory-mapped numpy array."""
+    def __init__(self, mmap, batch_size):
+        self.mmap = mmap
+        self.batch_size = batch_size
+
+    def __len__(self):
+        return len(self.mmap) // self.batch_size
+
+    def __getitem__(self, idx):
+        start_idx = idx * self.batch_size
+        end_idx = start_idx + self.batch_size
+        batch = self.mmap[start_idx:end_idx]
+        return torch.from_numpy(batch).to(torch.float32)
+
+
+class ActivationLoader:
+    """
+    Loads precomputed activations from disk.
+    We assume that the stored activations are sufficiently shuffled.
+    """
+    def __init__(self, np_path: str, cfg: SAEConfig):
+        self.mmap = np.memmap(np_path, dtype=np.float16, mode='r')
+        total_rows = self.mmap.shape[0] // cfg.d_in
+        self.mmap = np.memmap(np_path, dtype=np.float16, mode='r', shape=(total_rows, cfg.d_in))
+        self.dataset = ActivationDataset(self.mmap, cfg.train_batch_size)
+        self.dataloader = DataLoader(self.dataset, batch_size=1, num_workers=2, pin_memory=True)
+        self.iterator = iter(self.dataloader)
+    
+    def get_activations(self):
+        try:
+            activations = next(self.iterator).squeeze(0)
+            # squeeze removes the extra dimension added by DataLoader
+        except StopIteration:
+            self.iterator = iter(self.dataloader)
+            activations = next(self.iterator).squeeze(0)
+        return activations

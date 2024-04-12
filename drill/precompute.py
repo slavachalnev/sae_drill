@@ -13,8 +13,7 @@ def compute_and_save_activations(cfg: SAEConfig, output_file: str, max_batches: 
     model = HookedTransformer.from_pretrained(cfg.model_name) 
     buffer = ActivationBuffer(cfg, model)
     
-    # TODO: replace with train_batch_size when I fix buffer.get_activations
-    total_rows = max_batches * cfg.store_batch_size * cfg.context_size
+    total_rows = max_batches * cfg.train_batch_size
     
     mmap = np.memmap(output_file, dtype=np.float16, mode='w+', shape=(total_rows, cfg.d_in))
     
@@ -35,6 +34,8 @@ if __name__ == "__main__":
         device="cuda",
         store_batch_size=32,
         n_batches_in_buffer=100,
+        train_batch_size=32*1024,
     )
-    # ctx len is 1024
-    compute_and_save_activations(cfg, f"{dir}/activations_5k.npy", max_batches=500) # 60000
+
+    # ctx len is 1024. so 32 * 1024 * 60000 is approx 2B tokens.
+    compute_and_save_activations(cfg, f"{dir}/activations_5k.npy", max_batches=5000) # 60000

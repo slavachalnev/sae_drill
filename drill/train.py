@@ -4,7 +4,7 @@ import wandb
 import torch
 from config import SAEConfig
 from model import SparseAutoencoder
-from buffer import ActivationBuffer
+from buffer import ActivationBuffer, ActivationLoader
 from transformer_lens import HookedTransformer
 
 
@@ -12,18 +12,23 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     cfg = SAEConfig(device=device,
                     # steps_between_resample=10, ## for testing
-                    # log_to_wandb=False,  ## for testing
+                    log_to_wandb=False,  ## for testing
                     # n_batches_in_buffer=10,  ## for testing
                     )
     
     # Initialize wandb
     if cfg.log_to_wandb:
         wandb.init(project=cfg.wandb_project, name=cfg.run_name, config=cfg.to_dict())
-
+    
     model = HookedTransformer.from_pretrained(cfg.model_name)
     sae = SparseAutoencoder(cfg)
     sae.to(cfg.device)
-    buffer = ActivationBuffer(cfg, model)
+
+    # buffer = ActivationBuffer(cfg, model)
+    buffer = ActivationLoader(
+        np_path="/mnt/hdd/activation_cache/NeelNanda/c4-code-tokenized-2b/gelu-2l/activations_5k.npy",
+        cfg=cfg
+        )
 
     optimizer = torch.optim.Adam(sae.parameters(), lr=cfg.lr)
 
@@ -46,6 +51,7 @@ def main():
     for step in range(num_steps):
         optimizer.zero_grad()
         acts = buffer.get_activations()
+        acts = acts.to(cfg.device)
 
         sae_out, feature_acts, loss, mse_loss, l1_loss = sae(acts)
 
@@ -106,6 +112,7 @@ def resample(sae: SparseAutoencoder, buffer: ActivationBuffer, dead_idxs):
     all_loss = []
     for _ in range(n_resample_steps):
         acts = buffer.get_activations()  # [4096, 512]
+        acts = acts.to(sae.W_enc.device)
 
         with torch.no_grad():
             sae_out = sae(acts)[0]
