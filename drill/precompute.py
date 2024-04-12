@@ -6,29 +6,21 @@ from tqdm import tqdm
 import torch
 from transformer_lens import HookedTransformer
 from config import SAEConfig
-from datasets import load_dataset
-from torch.utils.data import DataLoader
+from buffer import ActivationBuffer
 
 
-def compute_and_save_activations(cfg: SAEConfig, output_file: str, max_batches=None):
-    batch_size = 16
+def compute_and_save_activations(cfg: SAEConfig, output_file: str, max_batches: int):
     model = HookedTransformer.from_pretrained(cfg.model_name) 
-    dataset = load_dataset(cfg.dataset_path, split="train", streaming=True)
-    dataset = dataset.with_format("torch")
-    token_loader = iter(DataLoader(dataset, batch_size=batch_size))
-    hook_point = cfg.hook_point.format(layer=cfg.hook_point_layer)
+    buffer = ActivationBuffer(cfg, model)
     
-    if max_batches is None:
-        max_batches = len(dataset) // batch_size
-    total_rows = max_batches * batch_size * cfg.context_size
+    # TODO: replace with train_batch_size when I fix buffer.get_activations
+    total_rows = max_batches * cfg.store_batch_size * cfg.context_size
     
     mmap = np.memmap(output_file, dtype=np.float16, mode='w+', shape=(total_rows, cfg.d_in))
     
     row_idx = 0
     for i in tqdm(range(max_batches)):
-        tokens = next(token_loader)['tokens']
-        activations = model.run_with_cache(tokens, stop_at_layer=cfg.hook_point_layer + 1)[1][hook_point]
-        activations = activations.view(-1, cfg.d_in)
+        activations = buffer.get_activations()
         activations = activations.cpu().numpy().astype(np.float16)
         mmap[row_idx : row_idx + activations.shape[0]] = activations
         row_idx += activations.shape[0]
@@ -39,6 +31,10 @@ if __name__ == "__main__":
 
     dir = "/mnt/hdd/activation_cache/NeelNanda/c4-code-tokenized-2b/gelu-2l"
     os.makedirs(dir, exist_ok=True)
-    cfg = SAEConfig(device="cuda")
-    compute_and_save_activations(cfg, f"{dir}/activations_5k.npy", max_batches=5000) # 60000
-
+    cfg = SAEConfig(
+        device="cuda",
+        store_batch_size=32,
+        n_batches_in_buffer=100,
+    )
+    # ctx len is 1024
+    compute_and_save_activations(cfg, f"{dir}/activations_5k.npy", max_batches=500) # 60000
