@@ -50,8 +50,8 @@ def main():
     t = time.time()
 
     for step in range(num_steps):
-        if cfg.l1_warm_up:
-            l1_factor = min(1.0, step / 1000)
+        if cfg.l1_warm_up_steps:
+            l1_factor = min(1.0, step / cfg.l1_warm_up_steps)
         else:
             l1_factor = 1.0
 
@@ -62,7 +62,9 @@ def main():
         sae_out, feature_acts, loss, mse_loss, l1_loss = sae(acts, l1_factor=l1_factor)
 
         loss.backward()
+        sae.remove_gradient_parallel_to_decoder_directions()
         optimizer.step()
+        sae.set_decoder_norm_to_unit_norm()
         lr_scheduler.step()
 
         # Update dead feature tracker
@@ -82,6 +84,7 @@ def main():
                 "l1_loss": l1_loss.item(),
                 "dead_features_prop": dead_features_prop.item(),
                 "l_0": l_0.item(),
+                "l1_factor": l1_factor,
             })
 
         # if step % 10 == 0:
@@ -101,7 +104,8 @@ def main():
                 if cfg.tune_resample:
                     tune_resample(sae=sae, buffer=buffer, dead_idxs=dead_idxs)
                 reset_optimizer(sae, optimizer, dead_idxs)
-                steps_since_last_activation[dead_idxs] = 0
+                # steps_since_last_activation[dead_idxs] = 0
+                steps_since_last_activation[:] = 0
 
     # Save final model
     final_model_path = os.path.join(checkpoint_dir, "final_model.pt")
