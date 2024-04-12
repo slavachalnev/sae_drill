@@ -12,21 +12,23 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     cfg = SAEConfig(device=device,
                     # steps_between_resample=10, ## for testing
-                    log_to_wandb=False,  ## for testing
+                    # log_to_wandb=False,  ## for testing
                     # n_batches_in_buffer=10,  ## for testing
+                    steps_between_resample=25000,
+                    checkpoint_frequency=None,
                     )
     
     # Initialize wandb
     if cfg.log_to_wandb:
         wandb.init(project=cfg.wandb_project, name=cfg.run_name, config=cfg.to_dict())
     
-    model = HookedTransformer.from_pretrained(cfg.model_name)
     sae = SparseAutoencoder(cfg)
     sae.to(cfg.device)
 
+    # model = HookedTransformer.from_pretrained(cfg.model_name)
     # buffer = ActivationBuffer(cfg, model)
     buffer = ActivationLoader(
-        np_path="/mnt/hdd/activation_cache/NeelNanda/c4-code-tokenized-2b/gelu-2l/activations_5k.npy",
+        np_path="/home/slava/activation_cache/NeelNanda/c4-code-tokenized-2b/gelu-2l/activations_5k.npy",
         cfg=cfg
         )
 
@@ -40,7 +42,7 @@ def main():
         raise ValueError(f"Unknown lr_scheduler_name: {cfg.lr_scheduler_name}")
 
     # Create checkpoint directory
-    checkpoint_dir = "checkpoints"
+    checkpoint_dir = f"checkpoints/{time.strftime('%Y-%m-%d_%H-%M-%S')}"
     os.makedirs(checkpoint_dir, exist_ok=True)
 
     num_steps = cfg.n_training_tokens // cfg.train_batch_size
@@ -78,12 +80,12 @@ def main():
                 "l_0": l_0.item(),
             })
 
-        if step % 10 == 0:
-            print(f"Step: {step}, Loss: {loss.item()}, Time: {time.time() - t}")
-            t = time.time()
+        # if step % 10 == 0:
+        #     print(f"Step: {step}, Loss: {loss.item()}, Time: {time.time() - t}")
+        #     t = time.time()
 
         # Save checkpoint every cfg.checkpoint_frequency steps
-        if step % cfg.checkpoint_frequency == 0:
+        if cfg.checkpoint_frequency and (step + 1) % cfg.checkpoint_frequency == 0:
             checkpoint_path = os.path.join(checkpoint_dir, f"checkpoint_step_{step}.pt")
             torch.save(sae.state_dict(), checkpoint_path)
             print(f"Checkpoint saved at step {step}")
@@ -92,6 +94,8 @@ def main():
             dead_idxs = steps_since_last_activation >= cfg.dead_feature_threshold
             if dead_idxs.sum() != 0:
                 resample(sae=sae, buffer=buffer, dead_idxs=dead_idxs)
+                if cfg.tune_resample:
+                    tune_resample(sae=sae, buffer=buffer, dead_idxs=dead_idxs)
                 reset_optimizer(sae, optimizer, dead_idxs)
                 steps_since_last_activation[dead_idxs] = 0
 
@@ -157,6 +161,29 @@ def reset_optimizer(sae: SparseAutoencoder, optimizer, dead_idxs):
                 state['exp_avg'][dead_idxs] = 0.0
                 state['exp_avg_sq'][dead_idxs] = 0.0
                 state['step'] = torch.tensor(0, dtype=torch.float32)
+
+
+def tune_resample(sae: SparseAutoencoder, buffer: ActivationBuffer, dead_idxs):
+    optimizer = torch.optim.Adam(sae.parameters(), lr=1e-4)
+    n_tune_steps = 200
+
+    for _ in range(n_tune_steps):
+        optimizer.zero_grad()
+        acts = buffer.get_activations()  # [4096, 512]
+        acts = acts.to(sae.W_enc.device)
+        sae_out, feature_acts, loss, mse_loss, l1_loss = sae(acts)
+        loss.backward()
+
+        # only tune the resampled features
+        for group in optimizer.param_groups:
+            for p in group['params']:
+                if p is sae.W_enc:
+                    p.grad[:, ~dead_idxs] = 0.0
+                elif p is sae.W_dec or p is sae.b_enc:
+                    p.grad[~dead_idxs] = 0.0
+
+        optimizer.step()
+    optimizer.zero_grad()
 
 
 if __name__ == "__main__":
