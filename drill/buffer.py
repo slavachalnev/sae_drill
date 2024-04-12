@@ -23,6 +23,7 @@ class ActivationBuffer:
     @torch.no_grad()
     def fill_buffer(self):
         buffer_index = self.batch_idx * self.cfg.train_batch_size
+        buffer_index = buffer_index - buffer_index % (self.cfg.store_batch_size * self.cfg.context_size)
         while buffer_index < self.buffer_size:
             tokens = self.get_token_batch()
             acts = self.model.run_with_cache(tokens,
