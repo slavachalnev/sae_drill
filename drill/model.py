@@ -68,7 +68,7 @@ class SparseAutoencoder(HookedRootModule):
 
         self.setup()  # Required for `HookedRootModule`
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, l1_factor: float = 1.0):
         # move x to correct dtype
         x = x.to(self.dtype)
         sae_in = self.hook_sae_in(
@@ -106,9 +106,9 @@ class SparseAutoencoder(HookedRootModule):
         sparsity = feature_acts.norm(p=self.lp_norm, dim=1).mean(dim=(0,))
 
         if self.cfg.use_sqrt_l1_penalty:
-            l1_loss = self.l1_coefficient * torch.sqrt(sparsity)
+            l1_loss = self.l1_coefficient * torch.sqrt(sparsity) * l1_factor
         else:
-            l1_loss = self.l1_coefficient * sparsity
+            l1_loss = self.l1_coefficient * sparsity * l1_factor
 
         loss = mse_loss + l1_loss
 

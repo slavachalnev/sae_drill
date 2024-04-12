@@ -24,12 +24,13 @@ class SAEConfig:
     store_batch_size: int = 16
 
     # Training Parameters
-    l1_coefficient: float = 5e-4
+    l1_coefficient: float = 5e-3
     lp_norm: float = 1
     lr: float = 3e-4
     lr_scheduler_name: str = (
         "constantwithwarmup"  # constant, constantwithwarmup
     )
+    l1_warm_up: bool = True
     lr_warm_up_steps: int = 500
     train_batch_size: int = 4096
     n_training_tokens: int = int(2e9)
@@ -40,7 +41,7 @@ class SAEConfig:
 
     checkpoint_frequency: Optional[int] = 10000
 
-    use_sqrt_l1_penalty: bool = False
+    use_sqrt_l1_penalty: bool = True
 
     # WANDB
     log_to_wandb: bool = True

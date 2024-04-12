@@ -14,7 +14,6 @@ def main():
                     # steps_between_resample=10, ## for testing
                     # log_to_wandb=False,  ## for testing
                     # n_batches_in_buffer=10,  ## for testing
-                    steps_between_resample=25000,
                     checkpoint_frequency=None,
                     )
     
@@ -51,11 +50,16 @@ def main():
     t = time.time()
 
     for step in range(num_steps):
+        if cfg.l1_warm_up:
+            l1_factor = min(1.0, step / 1000)
+        else:
+            l1_factor = 1.0
+
         optimizer.zero_grad()
         acts = buffer.get_activations()
         acts = acts.to(cfg.device)
 
-        sae_out, feature_acts, loss, mse_loss, l1_loss = sae(acts)
+        sae_out, feature_acts, loss, mse_loss, l1_loss = sae(acts, l1_factor=l1_factor)
 
         loss.backward()
         optimizer.step()
