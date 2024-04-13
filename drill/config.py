@@ -24,19 +24,19 @@ class SAEConfig:
     store_batch_size: int = 16
 
     # Training Parameters
-    l1_coefficient: float = 5e-4
+    l1_coefficient: float = 2e-4
     lp_norm: float = 1
     lr: float = 3e-4
     lr_scheduler_name: str = (
         "constantwithwarmup"  # constant, constantwithwarmup
     )
-    l1_warm_up_steps: int = 10000
+    l1_warm_up_steps: int = 1000
     lr_warm_up_steps: int = 500
     train_batch_size: int = 4096
     n_training_tokens: int = int(1e9)
 
     dead_feature_threshold: float = 2e7
-    steps_between_resample: int = 25000*100 # Anthropic does every 25000
+    steps_between_resample: int = 25000 # Anthropic does every 25000
     tune_resample: bool = False
 
     checkpoint_frequency: Optional[int] = 10000
