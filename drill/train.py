@@ -10,7 +10,7 @@ from transformer_lens import HookedTransformer
 
 
 def main():
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
     cfg = SAEConfig(device=device,
                     # steps_between_resample=10, ## for testing
                     # log_to_wandb=False,  ## for testing
