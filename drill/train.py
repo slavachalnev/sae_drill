@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import wandb
 import torch
 from config import SAEConfig
@@ -43,6 +44,8 @@ def main():
     # Create checkpoint directory
     checkpoint_dir = f"checkpoints/{time.strftime('%Y-%m-%d_%H-%M-%S')}"
     os.makedirs(checkpoint_dir, exist_ok=True)
+    with open(os.path.join(checkpoint_dir, "config.json"), "w") as f:
+        json.dump(cfg.to_dict(), f, indent=2)
 
     num_steps = cfg.n_training_tokens // cfg.train_batch_size
     steps_since_last_activation = torch.zeros(cfg.d_sae, dtype=torch.int64)
