@@ -16,8 +16,11 @@ class SAEConfig:
     # SAE Parameters
     d_in: int = 512
     expansion_factor: int = 8
-    from_pretrained_path: Optional[str] = None
     d_sae: Optional[int] = None
+
+    # Drill params
+    expanded_feature_id: Optional[int] = None  # None if normal SAE.
+    from_pretrained_path: Optional[str] = None
 
     # Activation Store Parameters
     n_batches_in_buffer: int = 50
@@ -40,8 +43,6 @@ class SAEConfig:
     tune_resample: bool = False
 
     checkpoint_frequency: Optional[int] = 10000
-
-    use_sqrt_l1_penalty: bool = False
 
     # WANDB
     log_to_wandb: bool = True
