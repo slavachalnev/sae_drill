@@ -21,6 +21,7 @@ class SAEConfig:
     # Drill params
     expanded_feature_id: Optional[int] = None  # None if normal SAE.
     from_pretrained_path: Optional[str] = None
+    noise_scale: float = 0.02
 
     # Activation Store Parameters
     n_batches_in_buffer: int = 50

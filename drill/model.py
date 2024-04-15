@@ -22,6 +22,7 @@ class SparseAutoencoder(HookedRootModule):
     def __init__(
         self,
         cfg: SAEConfig,
+        init_weights: bool = True,
     ):
         super().__init__()
         self.cfg = cfg
@@ -33,35 +34,33 @@ class SparseAutoencoder(HookedRootModule):
         # self.dtype = torch.float16 if cfg.half else torch.float32
         self.device = cfg.device
 
-        self.W_enc = nn.Parameter(
-            torch.nn.init.kaiming_uniform_(
-                torch.empty(self.d_in, self.d_sae, dtype=self.dtype, device=self.device)
-            )
-        )
-        self.b_enc = nn.Parameter(
-            torch.zeros(self.d_sae, dtype=self.dtype, device=self.device)
-        )
-
-        self.W_dec = nn.Parameter(
-            torch.nn.init.kaiming_uniform_(
-                torch.empty(self.d_sae, self.d_in, dtype=self.dtype, device=self.device)
-            )
-        )
-
-        with torch.no_grad():
-            # Anthropic normalize this to have unit columns
-            self.W_dec.data /= torch.norm(self.W_dec.data, dim=1, keepdim=True)
-
-        self.b_dec = nn.Parameter(
-            torch.zeros(self.d_in, dtype=self.dtype, device=self.device)
-        )
-
         self.hook_sae_in = HookPoint()
         self.hook_hidden_pre = HookPoint()
         self.hook_hidden_post = HookPoint()
         self.hook_sae_out = HookPoint()
 
-        self.setup()  # Required for `HookedRootModule`
+        if init_weights:
+            self.W_enc = nn.Parameter(
+                torch.nn.init.kaiming_uniform_(
+                    torch.empty(self.d_in, self.d_sae, dtype=self.dtype, device=self.device)
+                )
+            )
+            self.b_enc = nn.Parameter(
+                torch.zeros(self.d_sae, dtype=self.dtype, device=self.device)
+            )
+            self.W_dec = nn.Parameter(
+                torch.nn.init.kaiming_uniform_(
+                    torch.empty(self.d_sae, self.d_in, dtype=self.dtype, device=self.device)
+                )
+            )
+            with torch.no_grad():
+                # Anthropic normalize this to have unit columns
+                self.W_dec.data /= torch.norm(self.W_dec.data, dim=1, keepdim=True)
+            self.b_dec = nn.Parameter(
+                torch.zeros(self.d_in, dtype=self.dtype, device=self.device)
+            )
+
+            self.setup()  # Required for `HookedRootModule`
     
     def _forward(self, x: torch.Tensor):
         # move x to correct dtype
@@ -180,8 +179,25 @@ class SparseAutoencoder(HookedRootModule):
 
 
 class DrillSAE(SparseAutoencoder):
-    def __init__(self, cfg: SAEConfig):
-        super().__init__(cfg)
+    def __init__(self, cfg: SAEConfig, feature: torch.Tensor):
+        assert feature.shape == (2, cfg.d_in)
+
+        super().__init__(cfg, init_weights=False)
+
+        noise_enc = torch.randn(cfg.d_in, cfg.d_sae, dtype=self.dtype, device=self.device) * cfg.noise_scale
+        self.W_enc = nn.Parameter((feature[0].reshape(-1, 1) + noise_enc).to(self.dtype).to(self.device))
+
+        noise_dec = torch.randn(cfg.d_sae, cfg.d_in, dtype=self.dtype, device=self.device) * cfg.noise_scale
+        self.W_dec = nn.Parameter((feature[1].reshape(1, -1) + noise_dec).to(self.dtype).to(self.device))
+
+        self.b_enc = nn.Parameter(torch.zeros(self.d_sae, dtype=self.dtype, device=self.device))
+        self.b_dec = nn.Parameter(torch.zeros(self.d_in, dtype=self.dtype, device=self.device))
+
+        with torch.no_grad():
+            self.W_dec.data /= torch.norm(self.W_dec.data, dim=1, keepdim=True)
+
+        self.setup()  # Required for `HookedRootModule`
+
     
     def forward(self, x: torch.Tensor):
         sae_out, feature_acts = self._forward(x)
