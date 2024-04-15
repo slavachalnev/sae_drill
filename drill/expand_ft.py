@@ -6,7 +6,7 @@ import os
 import json
 import torch
 from config import SAEConfig
-from model import SparseAutoencoder
+from model import SparseAutoencoder, DrillSAE
 from buffer import ActivationLoader, ActivationBuffer
 from transformer_lens import HookedTransformer
 
@@ -23,7 +23,11 @@ def main():
     sae = SparseAutoencoder(sae_cfg)
     sae.load_state_dict(torch.load(os.path.join(checkpoint_dir, "final_model.pt"), map_location=torch.device(sae_cfg.device)))
     sae.to(sae_cfg.device)
-    # TODO: set selected feature to 0.
+
+    # copy the feature and delete it from the model.
+    feature_enc_dec = torch.stack([sae.W_enc[:, feature_id], sae.W_dec[feature_id]])
+    sae.W_enc[:, feature_id] = 0
+    sae.W_dec[feature_id] = 0
 
     with open(os.path.join(checkpoint_dir, "config.json")) as f:
         drill_cfg = json.load(f)
@@ -32,8 +36,9 @@ def main():
     drill_cfg.from_pretrained_path = checkpoint_dir
     drill_cfg.d_sae = 8  # split original feature into 8 features
     drill_cfg.lr = 1e-4
+    drill_cfg.noise_scale = 0.02
 
-    drill = SparseAutoencoder(drill_cfg)
+    drill = DrillSAE(drill_cfg, feature_enc_dec)
     drill.to(drill_cfg.device)
 
     model = HookedTransformer.from_pretrained(sae_cfg.model_name, device=sae_cfg.device)
@@ -52,14 +57,21 @@ def main():
 
     for step in range(num_steps):
         optimizer.zero_grad()
-        acts = buffer.get_activations()
-        acts = acts.to(drill_cfg.device)
+        x = buffer.get_activations()
+        x = x.to(drill_cfg.device)
 
-        sae_out, _, _, _, _ = sae(acts)
-        drill_out, _, _, _, l1_loss = drill(acts)
+        with torch.no_grad():
+            sae_out, _, _, _, _ = sae(x)
 
-        # TODO: compute loss and backpropagate.
+        drill_out, _, l1_loss = drill(x)
 
+        sum_out = sae_out + drill_out
+        x_centred = x - x.mean(dim=0, keepdim=True)
+        mse_loss = torch.pow((sum_out - x.float()), 2)/ (x_centred**2).sum(dim=-1, keepdim=True).sqrt()
+        mse_loss = mse_loss.mean()
+        loss = mse_loss + l1_loss
+
+        loss.backward()
         drill.remove_gradient_parallel_to_decoder_directions()
         optimizer.step()
         drill.set_decoder_norm_to_unit_norm()
