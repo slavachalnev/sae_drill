@@ -24,6 +24,7 @@ class ActivationBuffer:
 
     @torch.no_grad()
     def fill_buffer(self):
+        print("Filling buffer")
         buffer_index = self.batch_idx * self.cfg.train_batch_size
         while buffer_index < self.buffer_size:
             tokens = self.get_token_batch()
@@ -32,7 +33,9 @@ class ActivationBuffer:
                                              names_filter=[self.hook_point],
                                              )[1][self.hook_point]
             acts = acts.view(-1, self.cfg.d_in)
-            # <-- this is where we put the filter.
+
+            if self.filter is not None:
+                acts = acts[self.filter(acts)]
 
             remaining_space = self.buffer_size - buffer_index
             n_to_add = min(acts.shape[0], remaining_space)

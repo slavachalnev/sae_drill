@@ -5,6 +5,7 @@ import time
 import os
 import json
 import torch
+import einops
 from config import SAEConfig
 from model import SparseAutoencoder, DrillSAE
 from buffer import ActivationLoader, ActivationBuffer
@@ -21,6 +22,8 @@ def main():
     sae_cfg.device = device
 
     sae = SparseAutoencoder(sae_cfg)
+    for param in sae.parameters():
+        param.requires_grad = False
     sae.load_state_dict(torch.load(os.path.join(checkpoint_dir, "final_model.pt"), map_location=torch.device(sae_cfg.device)))
     sae.to(sae_cfg.device)
 
@@ -28,6 +31,17 @@ def main():
     feature_enc_dec = torch.stack([sae.W_enc[:, feature_id], sae.W_dec[feature_id]])
     sae.W_enc[:, feature_id] = 0
     sae.W_dec[feature_id] = 0
+
+    print('encdec shape', feature_enc_dec.shape)
+
+    def feature_filter(x):
+        # x: (batch_size, d_in)
+        x = x.to(sae_cfg.device)
+        x = x - sae.b_dec
+        x = x @ feature_enc_dec[0]
+        x += sae.b_enc[feature_id]
+        x = torch.nn.functional.relu(x)
+        return x > 0
 
     with open(os.path.join(checkpoint_dir, "config.json")) as f:
         drill_cfg = json.load(f)
@@ -44,7 +58,7 @@ def main():
     model = HookedTransformer.from_pretrained(sae_cfg.model_name, device=sae_cfg.device)
 
     # TODO: pass sae and feature to buffer for filtering.
-    buffer = ActivationBuffer(drill_cfg, model)
+    buffer = ActivationBuffer(drill_cfg, model, filter=feature_filter)
 
     optimizer = torch.optim.Adam(drill.parameters(), lr=drill_cfg.lr)
 
@@ -75,7 +89,15 @@ def main():
         drill.remove_gradient_parallel_to_decoder_directions()
         optimizer.step()
         drill.set_decoder_norm_to_unit_norm()
-    
+
+        # TODO: log to wandb: loss, mse_loss, l1_loss, l_0
+
+        # TODO: compute activation freq for every feature in drill.
+
+        if step % 10 == 0:
+            print(f"Step: {step}, Loss: {loss.item()}, MSE Loss: {mse_loss.item()}, L1 Loss: {l1_loss.item()}")
+
+
 
 
 if __name__ == "__main__":
