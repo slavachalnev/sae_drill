@@ -52,12 +52,14 @@ def main():
     drill_cfg.lr = 1e-4
     drill_cfg.noise_scale = 0.02
 
+    if drill_cfg.log_to_wandb:
+        wandb.init(project="drill", name=drill_cfg.run_name, config=drill_cfg.to_dict())
+
     drill = DrillSAE(drill_cfg, feature_enc_dec)
     drill.to(drill_cfg.device)
 
     model = HookedTransformer.from_pretrained(sae_cfg.model_name, device=sae_cfg.device)
 
-    # TODO: pass sae and feature to buffer for filtering.
     buffer = ActivationBuffer(drill_cfg, model, filter=feature_filter)
 
     optimizer = torch.optim.Adam(drill.parameters(), lr=drill_cfg.lr)
@@ -77,7 +79,7 @@ def main():
         with torch.no_grad():
             sae_out, _, _, _, _ = sae(x)
 
-        drill_out, _, l1_loss = drill(x)
+        drill_out, feature_acts, l1_loss = drill(x)
 
         sum_out = sae_out + drill_out
         x_centred = x - x.mean(dim=0, keepdim=True)
@@ -90,14 +92,27 @@ def main():
         optimizer.step()
         drill.set_decoder_norm_to_unit_norm()
 
-        # TODO: log to wandb: loss, mse_loss, l1_loss, l_0
+        l_0 = (feature_acts > 0).float().sum(dim=-1).mean()
+        if drill_cfg.log_to_wandb and (step + 1) % drill_cfg.wandb_log_frequency == 0:
+            wandb.log({
+                "step": step,
+                "loss": loss.item(),
+                "mse_loss": mse_loss.item(),
+                "l1_loss": l1_loss.item(),
+                "l_0": l_0.item(),
+            })
 
         # TODO: compute activation freq for every feature in drill.
 
         if step % 10 == 0:
             print(f"Step: {step}, Loss: {loss.item()}, MSE Loss: {mse_loss.item()}, L1 Loss: {l1_loss.item()}")
-
-
+    
+    # Save final model
+    final_model_path = os.path.join(checkpoint_dir, "final_model.pt")
+    torch.save(sae.state_dict(), final_model_path)
+    
+    if drill_cfg.log_to_wandb:
+        wandb.finish()
 
 
 if __name__ == "__main__":
