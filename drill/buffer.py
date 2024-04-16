@@ -2,6 +2,7 @@ from typing import Optional
 import time
 import torch
 import numpy as np
+from tqdm import tqdm
 from datasets import load_dataset
 from torch.utils.data import DataLoader, Dataset
 from transformer_lens import HookedTransformer
@@ -24,23 +25,25 @@ class ActivationBuffer:
 
     @torch.no_grad()
     def fill_buffer(self):
-        print("Filling buffer")
         buffer_index = self.batch_idx * self.cfg.train_batch_size
-        while buffer_index < self.buffer_size:
-            tokens = self.get_token_batch()
-            acts = self.model.run_with_cache(tokens,
-                                             stop_at_layer=self.cfg.hook_point_layer + 1,
-                                             names_filter=[self.hook_point],
-                                             )[1][self.hook_point]
-            acts = acts.view(-1, self.cfg.d_in)
+        with tqdm(total=self.buffer_size, desc="Filling buffer") as pbar:
+            pbar.update(buffer_index)
+            while buffer_index < self.buffer_size:
+                tokens = self.get_token_batch()
+                acts = self.model.run_with_cache(tokens,
+                                                stop_at_layer=self.cfg.hook_point_layer + 1,
+                                                names_filter=[self.hook_point],
+                                                )[1][self.hook_point]
+                acts = acts.view(-1, self.cfg.d_in)
 
-            if self.filter is not None:
-                acts = acts[self.filter(acts)]
+                if self.filter is not None:
+                    acts = acts[self.filter(acts)]
 
-            remaining_space = self.buffer_size - buffer_index
-            n_to_add = min(acts.shape[0], remaining_space)
-            self.buffer[buffer_index : buffer_index + n_to_add] = acts[:n_to_add]
-            buffer_index += n_to_add
+                remaining_space = self.buffer_size - buffer_index
+                n_to_add = min(acts.shape[0], remaining_space)
+                self.buffer[buffer_index : buffer_index + n_to_add] = acts[:n_to_add]
+                buffer_index += n_to_add
+                pbar.update(n_to_add)
         
         self.buffer = self.buffer[torch.randperm(self.buffer_size)]
         self.batch_idx = 0
