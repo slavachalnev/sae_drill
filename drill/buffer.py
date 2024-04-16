@@ -1,3 +1,4 @@
+from typing import Optional
 import time
 import torch
 import numpy as np
@@ -8,7 +9,7 @@ from config import SAEConfig
 
 
 class ActivationBuffer:
-    def __init__(self, cfg: SAEConfig, model: HookedTransformer):
+    def __init__(self, cfg: SAEConfig, model: HookedTransformer, filter: Optional[callable] = None):
         self.cfg: SAEConfig = cfg
         self.model: HookedTransformer = model
         self.dataset = load_dataset(cfg.dataset_path, split="train", streaming=True)
@@ -18,12 +19,12 @@ class ActivationBuffer:
         self.buffer_size = cfg.n_batches_in_buffer * cfg.store_batch_size * cfg.context_size
         self.buffer = torch.zeros((self.buffer_size, self.cfg.d_in), dtype=torch.float32, device=cfg.device)
         self.batch_idx = 0  # index of the output batch
+        self.filter = filter
         self.fill_buffer()
 
     @torch.no_grad()
     def fill_buffer(self):
         buffer_index = self.batch_idx * self.cfg.train_batch_size
-        buffer_index = buffer_index - buffer_index % (self.cfg.store_batch_size * self.cfg.context_size)
         while buffer_index < self.buffer_size:
             tokens = self.get_token_batch()
             acts = self.model.run_with_cache(tokens,
@@ -31,8 +32,12 @@ class ActivationBuffer:
                                              names_filter=[self.hook_point],
                                              )[1][self.hook_point]
             acts = acts.view(-1, self.cfg.d_in)
-            self.buffer[buffer_index : buffer_index + self.cfg.store_batch_size * self.cfg.context_size] = acts
-            buffer_index += self.cfg.store_batch_size * self.cfg.context_size
+            # <-- this is where we put the filter.
+
+            remaining_space = self.buffer_size - buffer_index
+            n_to_add = min(acts.shape[0], remaining_space)
+            self.buffer[buffer_index : buffer_index + n_to_add] = acts[:n_to_add]
+            buffer_index += n_to_add
         
         self.buffer = self.buffer[torch.randperm(self.buffer_size)]
         self.batch_idx = 0
