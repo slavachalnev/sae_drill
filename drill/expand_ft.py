@@ -32,8 +32,7 @@ def main():
     sae.W_enc[:, feature_id] = 0
     sae.W_dec[feature_id] = 0
 
-    print('encdec shape', feature_enc_dec.shape)
-
+    @torch.no_grad()
     def feature_filter(x):
         # x: (batch_size, d_in)
         x = x.to(sae_cfg.device)
@@ -51,6 +50,7 @@ def main():
     drill_cfg.d_sae = 8  # split original feature into 8 features
     drill_cfg.lr = 1e-4
     drill_cfg.noise_scale = 0.02
+    drill_cfg.wandb_log_frequency = 10
 
     if drill_cfg.log_to_wandb:
         wandb.init(project="drill", name=drill_cfg.run_name, config=drill_cfg.to_dict())

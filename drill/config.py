@@ -25,7 +25,7 @@ class SAEConfig:
 
     # Activation Store Parameters
     n_batches_in_buffer: int = 50
-    store_batch_size: int = 16
+    store_batch_size: int = 64
 
     # Training Parameters
     l1_coefficient: float = 2e-4

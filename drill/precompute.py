@@ -80,7 +80,7 @@ if __name__ == "__main__":
 
     # ctx len is 1024. so 32 * 1024 * 60000 is approx 2B tokens.
     compute_and_save_activations(cfg,
-                                 f"{dir}/acts_2k_ft_{feature_id}.npy",
-                                 max_batches=2000, # 60000
+                                 f"{dir}/acts_5k_ft_{feature_id}.npy",
+                                 max_batches=5000, # 60000
                                  filter=get_filter(sae_dir, feature_id)
                                  )
