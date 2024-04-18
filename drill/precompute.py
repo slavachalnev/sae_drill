@@ -49,6 +49,9 @@ def get_filter(sae_checkpoint_dir: str, feature_id: int):
     sae_cfg = SAEConfig(**sae_cfg)
     sae_cfg.device = "cuda"
     sae = SparseAutoencoder(sae_cfg)
+    sae.load_state_dict(torch.load(os.path.join(sae_checkpoint_dir, "final_model.pt"),
+                                   map_location=torch.device(sae_cfg.device)))
+    sae.to(sae_cfg.device)
 
     def feature_filter(x):
         # x: (batch_size, d_in)
@@ -69,8 +72,6 @@ if __name__ == "__main__":
     sae_dir = "checkpoints/2024-04-13_12-30-52" # expansion factor = 8
 
     feature_id = 3
-    dir = "/mnt/hdd/activation_cache/NeelNanda/c4-code-tokenized-2b/gelu-2l"
-    os.makedirs(dir, exist_ok=True)
     cfg = SAEConfig(
         device="cuda",
         store_batch_size=32,
@@ -78,9 +79,12 @@ if __name__ == "__main__":
         train_batch_size=32*1024,
     )
 
+    dir = "/mnt/hdd/activation_cache/NeelNanda/c4-code-tokenized-2b/gelu-2l"
+    os.makedirs(dir, exist_ok=True)
+
     # ctx len is 1024. so 32 * 1024 * 60000 is approx 2B tokens.
     compute_and_save_activations(cfg,
-                                 f"{dir}/acts_5k_ft_{feature_id}.npy",
-                                 max_batches=5000, # 60000
+                                 f"{dir}/acts_1k_ft_{feature_id}.npy",
+                                 max_batches=1000, # 60000
                                  filter=get_filter(sae_dir, feature_id)
                                  )
