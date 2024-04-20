@@ -79,12 +79,12 @@ if __name__ == "__main__":
         train_batch_size=32*1024,
     )
 
-    dir = "/mnt/hdd/activation_cache/NeelNanda/c4-code-tokenized-2b/gelu-2l"
+    dir = "/mnt/ssd/activation_cache/NeelNanda/c4-code-tokenized-2b/gelu-2l"
     os.makedirs(dir, exist_ok=True)
 
     # ctx len is 1024. so 32 * 1024 * 60000 is approx 2B tokens.
     compute_and_save_activations(cfg,
-                                 f"{dir}/acts_1k_ft_{feature_id}.npy",
-                                 max_batches=1000, # 60000
+                                 f"{dir}/acts_10k_ft_{feature_id}.npy",
+                                 max_batches=10000, # 60000
                                  filter=get_filter(sae_dir, feature_id)
                                  )

@@ -51,7 +51,7 @@ def main():
     drill_cfg.lr = 1e-4
     drill_cfg.noise_scale = 0.02
     drill_cfg.wandb_log_frequency = 100
-    drill_cfg.n_training_tokens = int(1e9)
+    drill_cfg.n_training_tokens = int(5e8)
 
     if drill_cfg.log_to_wandb:
         wandb.init(project="drill", name=drill_cfg.run_name, config=drill_cfg.to_dict())
