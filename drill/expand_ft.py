@@ -50,7 +50,8 @@ def main():
     drill_cfg.d_sae = 8  # split original feature into 8 features
     drill_cfg.lr = 1e-4
     drill_cfg.noise_scale = 0.02
-    drill_cfg.wandb_log_frequency = 10
+    drill_cfg.wandb_log_frequency = 100
+    drill_cfg.n_training_tokens = int(1e9)
 
     if drill_cfg.log_to_wandb:
         wandb.init(project="drill", name=drill_cfg.run_name, config=drill_cfg.to_dict())
@@ -58,9 +59,12 @@ def main():
     drill = DrillSAE(drill_cfg, feature_enc_dec)
     drill.to(drill_cfg.device)
 
-    model = HookedTransformer.from_pretrained(sae_cfg.model_name, device=sae_cfg.device)
-
-    buffer = ActivationBuffer(drill_cfg, model, filter=feature_filter)
+    # model = HookedTransformer.from_pretrained(sae_cfg.model_name, device=sae_cfg.device)
+    # buffer = ActivationBuffer(drill_cfg, model, filter=feature_filter)
+    buffer = ActivationLoader(
+        np_path="/home/slava/activation_cache/NeelNanda/c4-code-tokenized-2b/gelu-2l/acts_1k_ft_3.npy",
+        cfg=drill_cfg,
+    )
 
     optimizer = torch.optim.Adam(drill.parameters(), lr=drill_cfg.lr)
 
